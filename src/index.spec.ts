@@ -14,7 +14,7 @@ vt.test("sTypeGuard", () => {
 });
 
 vt.test("sUnion", () => {
-  const schema = T.sUnion([T.sObject({ a: T.sNull() }), T.sString()]);
+  const schema = T.sUnion(T.sObject({ a: T.sNull() }), T.sString());
   vt.expect(schema.parse("ok")).toStrictEqual({
     success: true,
     value: "ok",
@@ -35,7 +35,7 @@ vt.test("sUnion", () => {
 });
 
 vt.test("sArray", () => {
-  const schema = T.sArray(T.sUnion([T.sString(), T.sNull()]));
+  const schema = T.sArray(T.sUnion(T.sString(), T.sNull()));
   vt.expect(schema.parse(["a", "b"])).toStrictEqual({
     success: true,
     value: ["a", "b"],
@@ -60,7 +60,7 @@ vt.test("sArray", () => {
 });
 
 vt.test("sTuple", () => {
-  const schema = T.sTuple([T.sNull(), T.sString(), T.sLiteral("literal")]);
+  const schema = T.sTuple(T.sNull(), T.sString(), T.sLiteral("literal"));
   vt.expect(schema.parse([null, "a", "literal"])).toStrictEqual({
     success: true,
     value: [null, "a", "literal"],
@@ -77,6 +77,52 @@ vt.test("sTuple", () => {
     success: false,
     path: { not_array: { a: 1 } },
   });
+});
+
+vt.test("sOpaque", () => {
+  {
+    const schema = T.sObject({
+      a: T.sOpaque("Id", T.sString()),
+      b: T.sString(),
+    });
+    vt.expect(schema.parse({ a: "a", b: "b" })).toStrictEqual({
+      success: true,
+      value: { a: "a", b: "b" },
+    });
+  }
+});
+
+vt.test("sOptional", () => {
+  {
+    const schema = T.sOptional(T.sString());
+    vt.expect(schema.parse("a")).toStrictEqual({
+      success: true,
+      value: "a",
+    });
+    vt.expect(schema.parse(null)).toStrictEqual({
+      success: false,
+      path: { not_string: null },
+    });
+    vt.expect(schema.parse(1)).toStrictEqual({
+      success: false,
+      path: { not_string: 1 },
+    });
+  }
+  {
+    const schema = T.sObject({ a: T.sOptional(T.sString()), b: T.sNumber() });
+    vt.expect(schema.parse({ a: "a", b: 1 })).toStrictEqual({
+      success: true,
+      value: { a: "a", b: 1 },
+    });
+    vt.expect(schema.parse({ b: 1 })).toStrictEqual({
+      success: true,
+      value: { b: 1 },
+    });
+    vt.expect(schema.parse({ a: undefined, b: 1 })).toStrictEqual({
+      success: false,
+      path: { invalid_element: { key: "a", path: { not_string: undefined } } },
+    });
+  }
 });
 
 vt.test("sObject", () => {
@@ -119,27 +165,49 @@ vt.test("sObject", () => {
   }
 });
 
+// Handles optional parameters expectedly.
+type Merge<T> = { [K in keyof T]: T[K] };
 // https://github.com/type-challenges/type-challenges/blob/194e6f075a47b5927a9cc50bcf709076fa1cc2c1/utils/index.d.ts
 type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y
   ? 1
   : 2
   ? true
   : false;
+type MEqual<X, Y> = Equal<Merge<X>, Merge<Y>>;
 type Expect<T extends true> = T;
+type NExpect<T extends false> = T;
 
 () => {
+  {
+    {
+      type _ = NExpect<Equal<{ a?: 1; b?: 2 } & { a: 1 }, { a: 1; b?: 2 }>>;
+    }
+    {
+      type _ = Expect<MEqual<{ a?: 1; b?: 2 } & { a: 1 }, { a: 1; b?: 2 }>>;
+    }
+  }
+  {
+    const sid = T.sOpaque("Id", T.sString());
+    const fn = (x: T.TOut<typeof sid>) => x;
+    type _ = NExpect<Equal<Parameters<typeof fn>, [string]>>;
+  }
+  {
+    const schema = T.sObject({
+      a: T.sNull(),
+      b: T.sUndefined(),
+      c: T.sOptional(T.sBoolean()),
+    });
+    type _ = Expect<
+      MEqual<T.TOut<typeof schema>, { a: null; b: undefined; c?: boolean }>
+    >;
+  }
   {
     const typeGuard = (x: unknown): x is number => typeof x === "number";
     const schema = T.sTypeGuard(typeGuard);
     type _ = Expect<Equal<T.TOut<typeof schema>, number>>;
   }
   {
-    const spec = [T.sObject({ a: T.sNull() }), T.sString()];
-    const schema = T.sUnion(spec);
-    type _ = Expect<Equal<T.TOut<typeof schema>, { a: null } | string>>;
-  }
-  {
-    const schema = T.sTuple([T.sNumber(), T.sString()]);
+    const schema = T.sTuple(T.sNumber(), T.sString());
     type _ = Expect<Equal<T.TOut<typeof schema>, [number, string]>>;
   }
   {
@@ -147,10 +215,10 @@ type Expect<T extends true> = T;
       a: T.sNull(),
       b: T.sUndefined(),
       c: T.sBoolean(),
-      d: T.sUnion([T.sNull(), T.sTuple([T.sArray(T.sString())])]),
+      d: T.sUnion(T.sNull(), T.sTuple(T.sArray(T.sString()))),
     });
     type _ = Expect<
-      Equal<
+      MEqual<
         T.TOut<typeof schema>,
         { a: null; b: undefined; c: boolean; d: null | [string[]] }
       >

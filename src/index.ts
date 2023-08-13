@@ -14,6 +14,11 @@ type TPath =
 
 type TRef<T> = { value?: T };
 
+declare const OPQUE_TAG: unique symbol;
+export type Opaque<Name extends string, T> = T & {
+  readonly [K in `__${Name}`]: typeof OPQUE_TAG;
+};
+
 type TSchema<T> = {
   guard: (value: unknown, path: TRef<TPath>) => value is T;
   parse: (
@@ -42,20 +47,49 @@ abstract class SBase<T> implements TSchema<T> {
   };
 }
 
-type GuardedType<Fn> = Fn extends (x: unknown) => x is infer X ? X : never;
+class SOptional<T> extends SBase<T> {
+  #spec: TSchema<T>;
+  constructor(spec: TSchema<T>) {
+    super();
+    this.#spec = spec;
+  }
+  guard = (value: unknown, path: TRef<TPath> = {}): value is T => {
+    return this.#spec.guard(value, path);
+  };
+}
 
-class STypeGuard<TSpec extends (x: unknown) => x is unknown> extends SBase<
-  GuardedType<TSpec>
-> {
-  #spec: TSpec;
-  constructor(spec: TSpec) {
+export const sOptional = <T>(spec: TSchema<T>) => {
+  return new SOptional(spec);
+};
+
+class SOpaque<Name extends string, T> extends SBase<Opaque<Name, T>> {
+  #spec: TSchema<T>;
+  constructor(_: Name, spec: TSchema<T>) {
     super();
     this.#spec = spec;
   }
   guard = (
     value: unknown,
     path: TRef<TPath> = {}
-  ): value is GuardedType<TSpec> => {
+  ): value is Opaque<Name, T> => {
+    return this.#spec.guard(value, path);
+  };
+}
+
+export const sOpaque = <Name extends string, T>(
+  name: Name,
+  spec: TSchema<T>
+) => {
+  return new SOpaque(name, spec);
+};
+
+class STypeGuard<T> extends SBase<T> {
+  #spec: (x: unknown, ...rest: unknown[]) => x is T;
+  constructor(spec: (x: unknown, ...rest: unknown[]) => x is T) {
+    super();
+    this.#spec = spec;
+  }
+  guard = (value: unknown, path: TRef<TPath> = {}): value is T => {
     if (this.#spec(value)) {
       return true;
     }
@@ -64,15 +98,15 @@ class STypeGuard<TSpec extends (x: unknown) => x is unknown> extends SBase<
   };
 }
 
-export const sTypeGuard = <TSpec extends (x: unknown) => x is T, T>(
-  spec: TSpec
+export const sTypeGuard = <T>(
+  spec: (x: unknown, ...rest: unknown[]) => x is T
 ) => {
   return new STypeGuard(spec);
 };
 
-class STuple<T extends unknown[]> extends SBase<[...T]> {
+class STuple<T extends unknown[]> extends SBase<T> {
   #spec: TWrapElementByTSchema<[...T]>;
-  constructor(spec: TWrapElementByTSchema<[...T]>) {
+  constructor(...spec: TWrapElementByTSchema<[...T]>) {
     super();
     this.#spec = spec;
   }
@@ -92,9 +126,9 @@ class STuple<T extends unknown[]> extends SBase<[...T]> {
 }
 
 export const sTuple = <T extends unknown[]>(
-  specs: TWrapElementByTSchema<[...T]>
+  ...spec: TWrapElementByTSchema<[...T]>
 ) => {
-  return new STuple(specs);
+  return new STuple(...spec);
 };
 
 type TNarrowable =
@@ -152,7 +186,7 @@ export const sArray = <T>(spec: TSchema<T>) => {
 
 class SUnion<T extends unknown[]> extends SBase<T[number]> {
   #spec: TWrapElementByTSchema<[...T]>;
-  constructor(spec: TWrapElementByTSchema<[...T]>) {
+  constructor(...spec: TWrapElementByTSchema<[...T]>) {
     super();
     this.#spec = spec;
   }
@@ -172,39 +206,62 @@ class SUnion<T extends unknown[]> extends SBase<T[number]> {
 }
 
 export const sUnion = <T extends unknown[]>(
-  spec: TWrapElementByTSchema<[...T]>
+  ...spec: TWrapElementByTSchema<[...T]>
 ) => {
-  return new SUnion(spec);
+  return new SUnion(...spec);
 };
 
-class SObject<T extends object> extends SBase<T> {
-  #spec: TWrapElementByTSchema<T>;
-  constructor(spec: TWrapElementByTSchema<T>) {
+type TRequiredKeys<Spec extends object> = {
+  [K in keyof Spec]: Spec[K] extends SOptional<infer _> ? never : K;
+}[keyof Spec];
+type _TObjectOut<Spec extends object> = {
+  [K in keyof Spec]: Spec[K] extends TSchema<infer U> ? U : never;
+};
+type TObjectOut<Spec extends object> = _TObjectOut<
+  Pick<Spec, TRequiredKeys<Spec>>
+> &
+  Partial<_TObjectOut<Spec>>;
+
+class SObject<Spec extends Record<string, TSchema<unknown>>> extends SBase<
+  TObjectOut<Spec>
+> {
+  #spec: Spec;
+  constructor(spec: Spec) {
     super();
     this.#spec = spec;
   }
-  guard = (value: unknown, path: TRef<TPath> = {}): value is T => {
+  guard = (
+    value: unknown,
+    path: TRef<TPath> = {}
+  ): value is TObjectOut<Spec> => {
     if (!isObject(value)) {
       path.value = { not_object: value };
       return false;
     }
     for (const k in this.#spec) {
+      const spec = this.#spec[k];
       if (!(k in value)) {
+        if (spec instanceof SOptional) {
+          continue;
+        }
         path.value = { not_found: k };
         return false;
-      }
-      const result = this.#spec[k].guard(value[k], path);
-      if (!result) {
-        path.value = { invalid_element: { key: k, path: path.value } };
-        return false;
+      } else {
+        const result = spec.guard(value[k], path);
+        if (!result) {
+          path.value = { invalid_element: { key: k, path: path.value } };
+          return false;
+        }
       }
     }
     return true;
   };
 }
 
-export const sObject = <T extends object>(spec: TWrapElementByTSchema<T>) => {
-  return new SObject<T>(spec);
+export const sObject = <Spec extends Record<string, TSchema<unknown>>>(
+  spec: Spec
+) => {
+  return new SObject(spec);
 };
 
 class SNumber extends SBase<number> {
