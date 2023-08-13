@@ -165,16 +165,13 @@ vt.test("sObject", () => {
   }
 });
 
-// Handles optional intersection types expectedly.
-// https://github.com/type-challenges/type-challenges/issues/8617#issuecomment-1166196791
-type Merge<T> = { [K in keyof T]: T[K] };
 // https://github.com/type-challenges/type-challenges/blob/194e6f075a47b5927a9cc50bcf709076fa1cc2c1/utils/index.d.ts
 type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y
   ? 1
   : 2
   ? true
   : false;
-type MEqual<X, Y> = Equal<Merge<X>, Merge<Y>>;
+type MEqual<X, Y> = Equal<T.Merge<X>, T.Merge<Y>>;
 type Expect<T extends true> = T;
 type NExpect<T extends false> = T;
 

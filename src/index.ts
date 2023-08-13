@@ -1,3 +1,7 @@
+// Handles optional intersection types expectedly.
+// https://github.com/type-challenges/type-challenges/issues/8617#issuecomment-1166196791
+export type Merge<T> = { [K in keyof T]: T[K] };
+
 type TPath =
   | undefined // Nothing to report
   | { invalid_element: { key: string | number; path: TPath } }
