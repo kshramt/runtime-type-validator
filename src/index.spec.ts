@@ -2,6 +2,17 @@ import * as vt from "vitest";
 
 import * as T from "./index.js";
 
+vt.test("sTypeGuard", () => {
+  const schema = T.sTypeGuard(
+    (x: unknown): x is number => typeof x === "number"
+  );
+  vt.expect(schema.parse(1)).toStrictEqual({ success: true, value: 1 });
+  vt.expect(schema.parse("1")).toStrictEqual({
+    success: false,
+    path: { invalid_value: "1" },
+  });
+});
+
 vt.test("sUnion", () => {
   const schema = T.sUnion([T.sObject({ a: T.sNull() }), T.sString()]);
   vt.expect(schema.parse("ok")).toStrictEqual({
@@ -117,6 +128,11 @@ type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y
 type Expect<T extends true> = T;
 
 () => {
+  {
+    const typeGuard = (x: unknown): x is number => typeof x === "number";
+    const schema = T.sTypeGuard(typeGuard);
+    type _ = Expect<Equal<T.TOut<typeof schema>, number>>;
+  }
   {
     const spec = [T.sObject({ a: T.sNull() }), T.sString()];
     const schema = T.sUnion(spec);

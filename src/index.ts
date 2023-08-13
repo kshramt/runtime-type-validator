@@ -42,6 +42,34 @@ abstract class SBase<T> implements TSchema<T> {
   };
 }
 
+type GuardedType<Fn> = Fn extends (x: unknown) => x is infer X ? X : never;
+
+class STypeGuard<TSpec extends (x: unknown) => x is unknown> extends SBase<
+  GuardedType<TSpec>
+> {
+  #spec: TSpec;
+  constructor(spec: TSpec) {
+    super();
+    this.#spec = spec;
+  }
+  guard = (
+    value: unknown,
+    path: TRef<TPath> = {}
+  ): value is GuardedType<TSpec> => {
+    if (this.#spec(value)) {
+      return true;
+    }
+    path.value = { invalid_value: value };
+    return false;
+  };
+}
+
+export const sTypeGuard = <TSpec extends (x: unknown) => x is T, T>(
+  spec: TSpec
+) => {
+  return new STypeGuard(spec);
+};
+
 class STuple<T extends unknown[]> extends SBase<[...T]> {
   #spec: TWrapElementByTSchema<[...T]>;
   constructor(spec: TWrapElementByTSchema<[...T]>) {
