@@ -1,6 +1,6 @@
 {
   "name": "@kshramt/runtime-type-validator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "This package offers runtime type validation features.",
   "main": "index.js",
   "types": "index.d.ts",
