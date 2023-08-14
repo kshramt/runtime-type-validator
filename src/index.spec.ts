@@ -237,7 +237,6 @@ type NExpect<T extends false> = T;
         d: T.$readonly(T.$optional(T.$string())),
         e: T.$optional(T.$readonly(T.$string())),
       });
-      type _2 = T.TMerge<T.$infer<typeof validator>>;
       type _ = Expect<
         Check<
           T.$infer<typeof validator>,
