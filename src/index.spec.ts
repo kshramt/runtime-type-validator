@@ -22,7 +22,7 @@ vt.test("T.$record", () => {
 
 vt.test("T.$typeGuard", () => {
   const validator = T.$typeGuard(
-    (x: unknown): x is number => typeof x === "number"
+    (x: unknown): x is number => typeof x === "number",
   );
   vt.expect(T.parse(validator, 1)).toStrictEqual({ success: true, value: 1 });
   vt.expect(T.parse(validator, "1")).toStrictEqual({

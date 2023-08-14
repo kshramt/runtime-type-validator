@@ -64,7 +64,7 @@ export const $optional = <V extends TValidator<unknown>>(validator: V) => {
 
 export const $opaque = <Name extends string, T>(
   _: Name,
-  validator: TValidator<T>
+  validator: TValidator<T>,
 ) => {
   return (value: unknown, path: TRef<TPath>): value is TOpaque<Name, T> => {
     return validator(value, path);
@@ -72,7 +72,7 @@ export const $opaque = <Name extends string, T>(
 };
 
 export const $typeGuard = <T>(
-  validator: (x: unknown, ...rest: unknown[]) => x is T
+  validator: (x: unknown, ...rest: unknown[]) => x is T,
 ) => {
   return (value: unknown, path: TRef<TPath>): value is T => {
     if (validator(value)) {
@@ -200,11 +200,11 @@ type TInferValues<Kvs extends object> = _TInferReadonlyOptionalValues<
 
 export const $record = <K extends string, VV extends TValidator<unknown>>(
   vk: TValidator<K>,
-  vv: VV
+  vv: VV,
 ) => {
   return (
     value: unknown,
-    path: TRef<TPath>
+    path: TRef<TPath>,
   ): value is VV extends { [TAGS]: { readonly: true } }
     ? { readonly [_ in K]: $infer<VV> }
     : { [_ in K]: $infer<VV> } => {
@@ -228,7 +228,7 @@ export const $record = <K extends string, VV extends TValidator<unknown>>(
 };
 
 export const $object = <Kvs extends Record<string, TValidator<unknown>>>(
-  kvs: Kvs
+  kvs: Kvs,
 ) => {
   return (value: unknown, path: TRef<TPath>): value is TInferValues<Kvs> => {
     if (!isObject(value)) {
