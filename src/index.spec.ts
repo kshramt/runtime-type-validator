@@ -226,6 +226,34 @@ type NExpect<T extends false> = T;
   }
   {
     {
+      const validator = T.$readonly(T.$string());
+      type _ = Expect<Check<T.$infer<typeof validator>, string>>;
+    }
+    {
+      const validator = T.$object({
+        a: T.$string(),
+        b: T.$readonly(T.$string()),
+        c: T.$optional(T.$string()),
+        d: T.$readonly(T.$optional(T.$string())),
+        e: T.$optional(T.$readonly(T.$string())),
+      });
+      type _2 = T.TMerge<T.$infer<typeof validator>>;
+      type _ = Expect<
+        Check<
+          T.TMerge<T.$infer<typeof validator>>,
+          {
+            a: string;
+            readonly b: string;
+            c?: string;
+            readonly d?: string;
+            readonly e?: string;
+          }
+        >
+      >;
+    }
+  }
+  {
+    {
       const idValidator = T.$opaque("Id", T.$string());
       const validator = T.$record(idValidator, T.$number());
       type _ = Expect<
@@ -259,10 +287,25 @@ type NExpect<T extends false> = T;
     const validator = T.$object({
       a: T.$null(),
       b: T.$undefined(),
-      c: T.$optional(T.$boolean()),
+      c: T.$optional(T.$readonly(T.$boolean())),
+      d: T.$readonly(T.$optional(T.$boolean())),
+      e: T.$optional(T.$boolean()),
+      f: T.$readonly(T.$boolean()),
+      g: T.$optional(T.$readonly(T.$union(T.$undefined(), T.$boolean()))),
     });
     type _ = Expect<
-      Check<T.$infer<typeof validator>, { a: null; b: undefined; c?: boolean }>
+      Check<
+        T.$infer<typeof validator>,
+        {
+          a: null;
+          b: undefined;
+          readonly c?: boolean;
+          readonly d?: boolean;
+          e?: boolean;
+          readonly f: boolean;
+          readonly g?: undefined | boolean;
+        }
+      >
     >;
   }
   {

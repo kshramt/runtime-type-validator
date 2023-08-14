@@ -1,5 +1,3 @@
-const OPTIONAL_TAG = Symbol("OPTIONAL_TAG");
-
 // Handles optional intersection types expectedly.
 // https://github.com/type-challenges/type-challenges/issues/8617#issuecomment-1166196791
 export type TMerge<T> = { [K in keyof T]: T[K] };
@@ -21,15 +19,28 @@ type TPath =
 
 type TRef<T> = { value?: T };
 
+const TAGS = Symbol("TAGS");
+type TTags = {
+  optional?: true;
+  readonly?: true;
+};
 type TValidator<T> = {
   (value: unknown, path: TRef<TPath>): value is T;
-  [OPTIONAL_TAG]?: true;
-};
-type TOptionalValidator<T> = {
-  (value: unknown, path: TRef<TPath>): value is T;
-  [OPTIONAL_TAG]: true;
+  [TAGS]?: TTags;
 };
 export type $infer<VT> = VT extends TValidator<infer T> ? T : never;
+
+const mergeTags = (
+  validator: TValidator<unknown>,
+  originalValidator: TValidator<unknown>,
+  newTags: TTags
+) => {
+  validator[TAGS] = {
+    ...originalValidator[TAGS],
+    ...validator[TAGS],
+    ...newTags,
+  };
+};
 
 export const parse = <T>(
   validator: TValidator<T>,
@@ -47,14 +58,19 @@ export type TOpaque<Name extends string, T> = T & {
   readonly [K in `__${Name}`]: typeof OPQUE_TAG;
 };
 
-export const $optional = <T>(validator: TValidator<T>) => {
-  const res = ((value: unknown, path: TRef<TPath>): value is T => {
+export const $readonly = <V extends TValidator<unknown>>(validator: V) => {
+  const res = ((value: unknown, path: TRef<TPath>): value is $infer<V> => {
     return validator(value, path);
-  }) as {
-    (value: unknown, path: TRef<TPath>): value is T;
-    [OPTIONAL_TAG]: true;
-  };
-  res[OPTIONAL_TAG] = true;
+  }) as V & { [TAGS]: { readonly: true } };
+  mergeTags(res, validator, { readonly: true });
+  return res;
+};
+
+export const $optional = <V extends TValidator<unknown>>(validator: V) => {
+  const res = ((value: unknown, path: TRef<TPath>): value is $infer<V> => {
+    return validator(value, path);
+  }) as V & { [TAGS]: { optional: true } };
+  mergeTags(res, validator, { optional: true });
   return res;
 };
 
@@ -151,9 +167,48 @@ export const $union = <T extends unknown[]>(
 };
 
 type TOptionalKeys<Kvs extends object> = {
-  [K in keyof Kvs]: Kvs[K] extends TOptionalValidator<infer _> ? K : never;
+  [K in keyof Kvs]: Kvs[K] extends { [TAGS]: { optional: true } } ? K : never;
 }[keyof Kvs];
 type TRequiredKeys<Kvs extends object> = Exclude<keyof Kvs, TOptionalKeys<Kvs>>;
+type TFilterOptional<Kvs extends object> = {
+  [K in TOptionalKeys<Kvs>]: Kvs[K];
+};
+type TFilterRequired<Kvs extends object> = {
+  [K in TRequiredKeys<Kvs>]: Kvs[K];
+};
+
+type TReadonlyKeys<Kvs extends object> = {
+  [K in keyof Kvs]: Kvs[K] extends { [TAGS]: { readonly: true } } ? K : never;
+}[keyof Kvs];
+type TNonReadonlyKeys<Kvs extends object> = Exclude<
+  keyof Kvs,
+  TReadonlyKeys<Kvs>
+>;
+type TFilterReadonly<Kvs extends object> = {
+  readonly [K in TReadonlyKeys<Kvs>]: Kvs[K];
+};
+type TFilterNonReadonly<Kvs extends object> = {
+  [K in TNonReadonlyKeys<Kvs>]: Kvs[K];
+};
+
+type _TInferReadonlyOptionalValues<Kvs extends object> = {
+  readonly [K in keyof Kvs]?: $infer<Kvs[K]>;
+};
+type _TInferNonReadonlyOptionalValues<Kvs extends object> = {
+  [K in keyof Kvs]?: $infer<Kvs[K]>;
+};
+type _TInferReadonlyRequiredValues<Kvs extends object> = {
+  readonly [K in keyof Kvs]: $infer<Kvs[K]>;
+};
+type _TInferNonReadonlyRequiredValues<Kvs extends object> = {
+  [K in keyof Kvs]: $infer<Kvs[K]>;
+};
+type TInferValues<Kvs extends object> = _TInferReadonlyOptionalValues<
+  TFilterReadonly<TFilterOptional<Kvs>>
+> &
+  _TInferReadonlyRequiredValues<TFilterReadonly<TFilterRequired<Kvs>>> &
+  _TInferNonReadonlyOptionalValues<TFilterNonReadonly<TFilterOptional<Kvs>>> &
+  _TInferNonReadonlyRequiredValues<TFilterNonReadonly<TFilterRequired<Kvs>>>;
 
 export const $record = <K extends string, V>(
   vk: TValidator<K>,
@@ -182,12 +237,7 @@ export const $record = <K extends string, V>(
 export const $object = <Kvs extends Record<string, TValidator<unknown>>>(
   kvs: Kvs
 ) => {
-  return (
-    value: unknown,
-    path: TRef<TPath>
-  ): value is { [K in TRequiredKeys<Kvs>]: $infer<Kvs[K]> } & Partial<{
-    [K in TOptionalKeys<Kvs>]: $infer<Kvs[K]>;
-  }> => {
+  return (value: unknown, path: TRef<TPath>): value is TInferValues<Kvs> => {
     if (!isObject(value)) {
       path.value = { not_object: value };
       return false;
@@ -195,7 +245,7 @@ export const $object = <Kvs extends Record<string, TValidator<unknown>>>(
     for (const k in kvs) {
       const validator = kvs[k];
       if (!(k in value)) {
-        if (validator[OPTIONAL_TAG]) {
+        if (validator[TAGS]?.optional) {
           continue;
         }
         path.value = { not_found: k };
