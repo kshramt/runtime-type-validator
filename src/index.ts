@@ -33,8 +33,8 @@ export type $infer<VT> = VT extends TValidator<infer T> ? T : never;
 export const parse = <T>(
   validator: TValidator<T>,
   value: unknown,
-  path: TRef<TPath> = {}
-) => {
+  path: TRef<TPath> = {},
+): { success: true; value: T } | { success: false; path: TPath } => {
   if (validator(value, path)) {
     return { success: true, value };
   }
