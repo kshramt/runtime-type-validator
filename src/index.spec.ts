@@ -240,7 +240,7 @@ type NExpect<T extends false> = T;
       type _2 = T.TMerge<T.$infer<typeof validator>>;
       type _ = Expect<
         Check<
-          T.TMerge<T.$infer<typeof validator>>,
+          T.$infer<typeof validator>,
           {
             a: string;
             readonly b: string;
@@ -253,6 +253,16 @@ type NExpect<T extends false> = T;
     }
   }
   {
+    {
+      const idValidator = T.$opaque("Id", T.$string());
+      const validator = T.$record(idValidator, T.$readonly(T.$number()));
+      type _ = Expect<
+        Check<
+          T.$infer<typeof validator>,
+          { readonly [_ in T.$infer<typeof idValidator>]: number }
+        >
+      >;
+    }
     {
       const idValidator = T.$opaque("Id", T.$string());
       const validator = T.$record(idValidator, T.$number());

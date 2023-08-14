@@ -30,18 +30,6 @@ type TValidator<T> = {
 };
 export type $infer<VT> = VT extends TValidator<infer T> ? T : never;
 
-const mergeTags = (
-  validator: TValidator<unknown>,
-  originalValidator: TValidator<unknown>,
-  newTags: TTags
-) => {
-  validator[TAGS] = {
-    ...originalValidator[TAGS],
-    ...validator[TAGS],
-    ...newTags,
-  };
-};
-
 export const parse = <T>(
   validator: TValidator<T>,
   value: unknown,
@@ -62,7 +50,7 @@ export const $readonly = <V extends TValidator<unknown>>(validator: V) => {
   const res = ((value: unknown, path: TRef<TPath>): value is $infer<V> => {
     return validator(value, path);
   }) as V & { [TAGS]: { readonly: true } };
-  mergeTags(res, validator, { readonly: true });
+  res[TAGS] = { ...validator[TAGS], readonly: true };
   return res;
 };
 
@@ -70,7 +58,7 @@ export const $optional = <V extends TValidator<unknown>>(validator: V) => {
   const res = ((value: unknown, path: TRef<TPath>): value is $infer<V> => {
     return validator(value, path);
   }) as V & { [TAGS]: { optional: true } };
-  mergeTags(res, validator, { optional: true });
+  res[TAGS] = { ...validator[TAGS], optional: true };
   return res;
 };
 
@@ -210,11 +198,16 @@ type TInferValues<Kvs extends object> = _TInferReadonlyOptionalValues<
   _TInferNonReadonlyOptionalValues<TFilterNonReadonly<TFilterOptional<Kvs>>> &
   _TInferNonReadonlyRequiredValues<TFilterNonReadonly<TFilterRequired<Kvs>>>;
 
-export const $record = <K extends string, V>(
+export const $record = <K extends string, VV extends TValidator<unknown>>(
   vk: TValidator<K>,
-  vv: TValidator<V>
+  vv: VV
 ) => {
-  return (value: unknown, path: TRef<TPath>): value is { [_ in K]: V } => {
+  return (
+    value: unknown,
+    path: TRef<TPath>
+  ): value is VV extends { [TAGS]: { readonly: true } }
+    ? { readonly [_ in K]: $infer<VV> }
+    : { [_ in K]: $infer<VV> } => {
     if (!isObject(value)) {
       path.value = { not_object: value };
       return false;
