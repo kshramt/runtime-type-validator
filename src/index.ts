@@ -230,7 +230,10 @@ export const $record = <K extends string, VV extends TValidator<unknown>>(
 export const $object = <Kvs extends Record<string, TValidator<unknown>>>(
   kvs: Kvs,
 ) => {
-  return (value: unknown, path: TRef<TPath>): value is TInferValues<Kvs> => {
+  return (
+    value: unknown,
+    path: TRef<TPath>,
+  ): value is TMerge<TInferValues<Kvs>> => {
     if (!isObject(value)) {
       path.value = { not_object: value };
       return false;
