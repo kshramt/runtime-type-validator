@@ -2,163 +2,190 @@ import * as vt from "vitest";
 
 import * as T from "./index.js";
 
-vt.test("sTypeGuard", () => {
-  const schema = T.sTypeGuard(
+vt.test("T.$record", () => {
+  {
+    const validator = T.$record(T.$opaque("Id", T.$string()), T.$number());
+    vt.expect(T.parse(validator, { a: 1 })).toStrictEqual({
+      success: true,
+      value: { a: 1 },
+    });
+    vt.expect(T.parse(validator, { a: "a" })).toStrictEqual({
+      success: false,
+      path: { invalid_element_value: { key: "a", path: { not_number: "a" } } },
+    });
+    vt.expect(T.parse(validator, null)).toStrictEqual({
+      success: false,
+      path: { not_object: null },
+    });
+  }
+});
+
+vt.test("T.$typeGuard", () => {
+  const validator = T.$typeGuard(
     (x: unknown): x is number => typeof x === "number"
   );
-  vt.expect(schema.parse(1)).toStrictEqual({ success: true, value: 1 });
-  vt.expect(schema.parse("1")).toStrictEqual({
+  vt.expect(T.parse(validator, 1)).toStrictEqual({ success: true, value: 1 });
+  vt.expect(T.parse(validator, "1")).toStrictEqual({
     success: false,
     path: { invalid_value: "1" },
   });
 });
 
-vt.test("sUnion", () => {
-  const schema = T.sUnion(T.sObject({ a: T.sNull() }), T.sString());
-  vt.expect(schema.parse("ok")).toStrictEqual({
+vt.test("T.$union", () => {
+  const validator = T.$union(T.$object({ a: T.$null() }), T.$string());
+  vt.expect(T.parse(validator, "ok")).toStrictEqual({
     success: true,
     value: "ok",
   });
-  vt.expect(schema.parse({ a: null })).toStrictEqual({
+  vt.expect(T.parse(validator, { a: null })).toStrictEqual({
     success: true,
     value: { a: null },
   });
-  vt.expect(schema.parse({ a: 9 })).toStrictEqual({
+  vt.expect(T.parse(validator, { a: 9 })).toStrictEqual({
     success: false,
     path: {
       not_union: [
-        { invalid_element: { key: "a", path: { not_null: 9 } } },
+        { invalid_element_value: { key: "a", path: { not_null: 9 } } },
         { not_string: { a: 9 } },
       ],
     },
   });
 });
 
-vt.test("sArray", () => {
-  const schema = T.sArray(T.sUnion(T.sString(), T.sNull()));
-  vt.expect(schema.parse(["a", "b"])).toStrictEqual({
+vt.test("T.$array", () => {
+  const validator = T.$array(T.$union(T.$string(), T.$null()));
+  vt.expect(T.parse(validator, ["a", "b"])).toStrictEqual({
     success: true,
     value: ["a", "b"],
   });
-  vt.expect(schema.parse(["a", null])).toStrictEqual({
+  vt.expect(T.parse(validator, ["a", null])).toStrictEqual({
     success: true,
     value: ["a", null],
   });
-  vt.expect(schema.parse(["a", 1])).toStrictEqual({
+  vt.expect(T.parse(validator, ["a", 1])).toStrictEqual({
     success: false,
     path: {
-      invalid_element: {
+      invalid_element_value: {
         key: 1,
         path: { not_union: [{ not_string: 1 }, { not_null: 1 }] },
       },
     },
   });
-  vt.expect(schema.parse({ a: 1 })).toStrictEqual({
+  vt.expect(T.parse(validator, { a: 1 })).toStrictEqual({
     success: false,
     path: { not_array: { a: 1 } },
   });
 });
 
-vt.test("sTuple", () => {
-  const schema = T.sTuple(T.sNull(), T.sString(), T.sLiteral("literal"));
-  vt.expect(schema.parse([null, "a", "literal"])).toStrictEqual({
+vt.test("T.$tuple", () => {
+  const validator = T.$tuple(T.$null(), T.$string(), T.$literal("literal"));
+  vt.expect(T.parse(validator, [null, "a", "literal"])).toStrictEqual({
     success: true,
     value: [null, "a", "literal"],
   });
-  vt.expect(schema.parse([null, 1, "literal"])).toStrictEqual({
+  vt.expect(T.parse(validator, [null, 1, "literal"])).toStrictEqual({
     success: false,
-    path: { invalid_element: { key: 1, path: { not_string: 1 } } },
+    path: { invalid_element_value: { key: 1, path: { not_string: 1 } } },
   });
-  vt.expect(schema.parse([null, "a", "LITERAL"])).toStrictEqual({
+  vt.expect(T.parse(validator, [null, "a", "LITERAL"])).toStrictEqual({
     success: false,
-    path: { invalid_element: { key: 2, path: { invalid_value: "LITERAL" } } },
+    path: {
+      invalid_element_value: { key: 2, path: { invalid_value: "LITERAL" } },
+    },
   });
-  vt.expect(schema.parse({ a: 1 })).toStrictEqual({
+  vt.expect(T.parse(validator, { a: 1 })).toStrictEqual({
     success: false,
     path: { not_array: { a: 1 } },
   });
 });
 
-vt.test("sOpaque", () => {
+vt.test("T.$opaque", () => {
   {
-    const schema = T.sObject({
-      a: T.sOpaque("Id", T.sString()),
-      b: T.sString(),
+    const validator = T.$object({
+      a: T.$opaque("Id", T.$string()),
+      b: T.$string(),
     });
-    vt.expect(schema.parse({ a: "a", b: "b" })).toStrictEqual({
+    vt.expect(T.parse(validator, { a: "a", b: "b" })).toStrictEqual({
       success: true,
       value: { a: "a", b: "b" },
     });
   }
 });
 
-vt.test("sOptional", () => {
+vt.test("T.$optional", () => {
   {
-    const schema = T.sOptional(T.sString());
-    vt.expect(schema.parse("a")).toStrictEqual({
+    const validator = T.$optional(T.$string());
+    vt.expect(T.parse(validator, "a")).toStrictEqual({
       success: true,
       value: "a",
     });
-    vt.expect(schema.parse(null)).toStrictEqual({
+    vt.expect(T.parse(validator, null)).toStrictEqual({
       success: false,
       path: { not_string: null },
     });
-    vt.expect(schema.parse(1)).toStrictEqual({
+    vt.expect(T.parse(validator, 1)).toStrictEqual({
       success: false,
       path: { not_string: 1 },
     });
   }
   {
-    const schema = T.sObject({ a: T.sOptional(T.sString()), b: T.sNumber() });
-    vt.expect(schema.parse({ a: "a", b: 1 })).toStrictEqual({
+    const validator = T.$object({
+      a: T.$optional(T.$string()),
+      b: T.$number(),
+    });
+    vt.expect(T.parse(validator, { a: "a", b: 1 })).toStrictEqual({
       success: true,
       value: { a: "a", b: 1 },
     });
-    vt.expect(schema.parse({ b: 1 })).toStrictEqual({
+    vt.expect(T.parse(validator, { b: 1 })).toStrictEqual({
       success: true,
       value: { b: 1 },
     });
-    vt.expect(schema.parse({ a: undefined, b: 1 })).toStrictEqual({
+    vt.expect(T.parse(validator, { a: undefined, b: 1 })).toStrictEqual({
       success: false,
-      path: { invalid_element: { key: "a", path: { not_string: undefined } } },
+      path: {
+        invalid_element_value: { key: "a", path: { not_string: undefined } },
+      },
     });
   }
 });
 
-vt.test("sObject", () => {
+vt.test("T.$object", () => {
   {
-    const schema = T.sObject({
-      a: T.sBoolean(),
-      b: T.sNumber(),
+    const validator = T.$object({
+      a: T.$boolean(),
+      b: T.$number(),
     });
-    vt.expect(schema.parse({ a: true, b: 1 })).toStrictEqual({
+    vt.expect(T.parse(validator, { a: true, b: 1 })).toStrictEqual({
       success: true,
       value: { a: true, b: 1 },
     });
-    vt.expect(schema.parse({ a: true, b: "b" })).toStrictEqual({
+    vt.expect(T.parse(validator, { a: true, b: "b" })).toStrictEqual({
       success: false,
-      path: { invalid_element: { key: "b", path: { not_number: "b" } } },
+      path: { invalid_element_value: { key: "b", path: { not_number: "b" } } },
     });
-    vt.expect(schema.parse({ a: null, b: 1 })).toStrictEqual({
+    vt.expect(T.parse(validator, { a: null, b: 1 })).toStrictEqual({
       success: false,
-      path: { invalid_element: { key: "a", path: { not_boolean: null } } },
+      path: {
+        invalid_element_value: { key: "a", path: { not_boolean: null } },
+      },
     });
-    vt.expect(schema.parse({ b: 1 })).toStrictEqual({
+    vt.expect(T.parse(validator, { b: 1 })).toStrictEqual({
       success: false,
       path: { not_found: "a" },
     });
   }
   {
-    const schema = T.sObject({ a: T.sUndefined() });
-    vt.expect(schema.parse({ a: undefined })).toStrictEqual({
+    const validator = T.$object({ a: T.$undefined() });
+    vt.expect(T.parse(validator, { a: undefined })).toStrictEqual({
       success: true,
       value: { a: undefined },
     });
-    vt.expect(schema.parse({ a: 8 })).toStrictEqual({
+    vt.expect(T.parse(validator, { a: 8 })).toStrictEqual({
       success: false,
-      path: { invalid_element: { key: "a", path: { not_undefined: 8 } } },
+      path: { invalid_element_value: { key: "a", path: { not_undefined: 8 } } },
     });
-    vt.expect(schema.parse({})).toStrictEqual({
+    vt.expect(T.parse(validator, {})).toStrictEqual({
       success: false,
       path: { not_found: "a" },
     });
@@ -171,7 +198,9 @@ type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y
   : 2
   ? true
   : false;
-type MEqual<X, Y> = Equal<T.Merge<X>, T.Merge<Y>>;
+type MEqual<X, Y> = Equal<T.TMerge<X>, T.TMerge<Y>>;
+type BExtends<X, Y> = X extends Y ? (Y extends X ? true : false) : false;
+type Check<X, Y> = MEqual<X, Y> extends true ? BExtends<X, Y> : false;
 type Expect<T extends true> = T;
 type NExpect<T extends false> = T;
 
@@ -183,41 +212,78 @@ type NExpect<T extends false> = T;
     {
       type _ = Expect<MEqual<{ a?: 1; b?: 2 } & { a: 1 }, { a: 1; b?: 2 }>>;
     }
+    {
+      {
+        type _ = Expect<Check<{ a?: 1; b?: 2 } & { a: 1 }, { a: 1; b?: 2 }>>;
+      }
+      {
+        type _ = NExpect<Check<{ a?: undefined | string }, { a?: string }>>;
+      }
+      {
+        type _ = Expect<Check<{ a?: string }, { a?: string }>>;
+      }
+    }
   }
   {
-    const sid = T.sOpaque("Id", T.sString());
-    const fn = (x: T.TOut<typeof sid>) => x;
-    type _ = NExpect<Equal<Parameters<typeof fn>, [string]>>;
+    {
+      const idValidator = T.$opaque("Id", T.$string());
+      const validator = T.$record(idValidator, T.$number());
+      type _ = Expect<
+        Check<
+          T.$infer<typeof validator>,
+          { [_ in T.$infer<typeof idValidator>]: number }
+        >
+      >;
+    }
+    {
+      const idValidator = T.$opaque("Id", T.$string());
+      const validator = T.$optional(T.$record(idValidator, T.$number()));
+      type _ = Expect<
+        Check<
+          T.$infer<typeof validator>,
+          { [_ in T.$infer<typeof idValidator>]: number }
+        >
+      >;
+    }
   }
   {
-    const schema = T.sObject({
-      a: T.sNull(),
-      b: T.sUndefined(),
-      c: T.sOptional(T.sBoolean()),
+    const validator = T.$optional(T.$literal("abc"));
+    type _ = Expect<Check<T.$infer<typeof validator>, "abc">>;
+  }
+  {
+    const sid = T.$opaque("Id", T.$string());
+    const fn = (x: T.$infer<typeof sid>) => x;
+    type _ = NExpect<Check<Parameters<typeof fn>, [string]>>;
+  }
+  {
+    const validator = T.$object({
+      a: T.$null(),
+      b: T.$undefined(),
+      c: T.$optional(T.$boolean()),
     });
     type _ = Expect<
-      MEqual<T.TOut<typeof schema>, { a: null; b: undefined; c?: boolean }>
+      Check<T.$infer<typeof validator>, { a: null; b: undefined; c?: boolean }>
     >;
   }
   {
     const typeGuard = (x: unknown): x is number => typeof x === "number";
-    const schema = T.sTypeGuard(typeGuard);
-    type _ = Expect<Equal<T.TOut<typeof schema>, number>>;
+    const validator = T.$typeGuard(typeGuard);
+    type _ = Expect<Check<T.$infer<typeof validator>, number>>;
   }
   {
-    const schema = T.sTuple(T.sNumber(), T.sString());
-    type _ = Expect<Equal<T.TOut<typeof schema>, [number, string]>>;
+    const validator = T.$tuple(T.$number(), T.$string());
+    type _ = Expect<Check<T.$infer<typeof validator>, [number, string]>>;
   }
   {
-    const schema = T.sObject({
-      a: T.sNull(),
-      b: T.sUndefined(),
-      c: T.sBoolean(),
-      d: T.sUnion(T.sNull(), T.sTuple(T.sArray(T.sString()))),
+    const validator = T.$object({
+      a: T.$null(),
+      b: T.$undefined(),
+      c: T.$boolean(),
+      d: T.$union(T.$null(), T.$tuple(T.$array(T.$string()))),
     });
     type _ = Expect<
-      MEqual<
-        T.TOut<typeof schema>,
+      Check<
+        T.$infer<typeof validator>,
         { a: null; b: undefined; c: boolean; d: null | [string[]] }
       >
     >;
