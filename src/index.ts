@@ -25,7 +25,7 @@ type TTags = {
   readonly?: true;
 };
 type TValidator<T> = {
-  (value: unknown, path: TRef<TPath>): value is T;
+  (value: unknown, path?: TRef<TPath>): value is T;
   [TAGS]?: TTags;
 };
 export type $infer<VT> = VT extends TValidator<infer T> ? T : never;
@@ -47,7 +47,7 @@ export type TOpaque<Name extends string, T> = T & {
 };
 
 export const $readonly = <V extends TValidator<unknown>>(validator: V) => {
-  const res = ((value: unknown, path: TRef<TPath>): value is $infer<V> => {
+  const res = ((value: unknown, path?: TRef<TPath>): value is $infer<V> => {
     return validator(value, path);
   }) as V & { [TAGS]: { readonly: true } };
   res[TAGS] = { ...validator[TAGS], readonly: true };
@@ -55,7 +55,7 @@ export const $readonly = <V extends TValidator<unknown>>(validator: V) => {
 };
 
 export const $optional = <V extends TValidator<unknown>>(validator: V) => {
-  const res = ((value: unknown, path: TRef<TPath>): value is $infer<V> => {
+  const res = ((value: unknown, path?: TRef<TPath>): value is $infer<V> => {
     return validator(value, path);
   }) as V & { [TAGS]: { optional: true } };
   res[TAGS] = { ...validator[TAGS], optional: true };
@@ -66,7 +66,7 @@ export const $opaque = <Name extends string, T>(
   _: Name,
   validator: TValidator<T>,
 ) => {
-  return (value: unknown, path: TRef<TPath>): value is TOpaque<Name, T> => {
+  return (value: unknown, path?: TRef<TPath>): value is TOpaque<Name, T> => {
     return validator(value, path);
   };
 };
@@ -74,11 +74,13 @@ export const $opaque = <Name extends string, T>(
 export const $typeGuard = <T>(
   validator: (x: unknown, ...rest: unknown[]) => x is T,
 ) => {
-  return (value: unknown, path: TRef<TPath>): value is T => {
+  return (value: unknown, path?: TRef<TPath>): value is T => {
     if (validator(value)) {
       return true;
     }
-    path.value = { invalid_value: value };
+    if (path) {
+      path.value = { invalid_value: value };
+    }
     return false;
   };
 };
@@ -86,14 +88,18 @@ export const $typeGuard = <T>(
 export const $tuple = <T extends unknown[]>(
   ...validators: [...{ [K in keyof T]: TValidator<T[K]> }]
 ) => {
-  return (value: unknown, path: TRef<TPath>): value is T => {
+  return (value: unknown, path?: TRef<TPath>): value is T => {
     if (!Array.isArray(value)) {
-      path.value = { not_array: value };
+      if (path) {
+        path.value = { not_array: value };
+      }
       return false;
     }
     for (let i = 0; i < validators.length; ++i) {
       if (!validators[i](value[i], path)) {
-        path.value = { invalid_element_value: { key: i, path: path.value } };
+        if (path) {
+          path.value = { invalid_element_value: { key: i, path: path.value } };
+        }
         return false;
       }
     }
@@ -111,24 +117,30 @@ type TNarrowable =
   | undefined;
 
 export const $literal = <T extends TNarrowable>(val: T) => {
-  return (value: unknown, path: TRef<TPath>): value is T => {
+  return (value: unknown, path?: TRef<TPath>): value is T => {
     if (value === val) {
       return true;
     }
-    path.value = { invalid_value: value };
+    if (path) {
+      path.value = { invalid_value: value };
+    }
     return false;
   };
 };
 
 export const $array = <T>(validator: TValidator<T>) => {
-  return (value: unknown, path: TRef<TPath>): value is T[] => {
+  return (value: unknown, path?: TRef<TPath>): value is T[] => {
     if (!Array.isArray(value)) {
-      path.value = { not_array: value };
+      if (path) {
+        path.value = { not_array: value };
+      }
       return false;
     }
     for (let i = 0; i < value.length; ++i) {
       if (!validator(value[i], path)) {
-        path.value = { invalid_element_value: { key: i, path: path.value } };
+        if (path) {
+          path.value = { invalid_element_value: { key: i, path: path.value } };
+        }
         return false;
       }
     }
@@ -139,7 +151,7 @@ export const $array = <T>(validator: TValidator<T>) => {
 export const $union = <T extends unknown[]>(
   ...validators: [...{ [K in keyof T]: TValidator<T[K]> }]
 ) => {
-  return (value: unknown, path: TRef<TPath>): value is T[number] => {
+  return (value: unknown, path?: TRef<TPath>): value is T[number] => {
     const paths = [];
     for (const validator of validators) {
       const p: TRef<TPath> = {};
@@ -149,7 +161,9 @@ export const $union = <T extends unknown[]>(
         paths.push(p.value);
       }
     }
-    path.value = { not_union: paths };
+    if (path) {
+      path.value = { not_union: paths };
+    }
     return false;
   };
 };
@@ -204,22 +218,28 @@ export const $record = <K extends string, VV extends TValidator<unknown>>(
 ) => {
   return (
     value: unknown,
-    path: TRef<TPath>,
+    path?: TRef<TPath>,
   ): value is VV extends { [TAGS]: { readonly: true } }
     ? { readonly [_ in K]: $infer<VV> }
     : { [_ in K]: $infer<VV> } => {
     if (!isObject(value)) {
-      path.value = { not_object: value };
+      if (path) {
+        path.value = { not_object: value };
+      }
       return false;
     }
     for (const k in value) {
       if (!vk(k, path)) {
-        path.value = { invalid_element_key: { path: path.value } };
+        if (path) {
+          path.value = { invalid_element_key: { path: path.value } };
+        }
         return false;
       }
       const v = value[k];
       if (!vv(v, path)) {
-        path.value = { invalid_element_value: { key: k, path: path.value } };
+        if (path) {
+          path.value = { invalid_element_value: { key: k, path: path.value } };
+        }
         return false;
       }
     }
@@ -230,9 +250,11 @@ export const $record = <K extends string, VV extends TValidator<unknown>>(
 export const $object = <Kvs extends Record<string, TValidator<unknown>>>(
   kvs: Kvs,
 ) => {
-  return (value: unknown, path: TRef<TPath>): value is TInferValues<Kvs> => {
+  return (value: unknown, path?: TRef<TPath>): value is TInferValues<Kvs> => {
     if (!isObject(value)) {
-      path.value = { not_object: value };
+      if (path) {
+        path.value = { not_object: value };
+      }
       return false;
     }
     for (const k in kvs) {
@@ -241,12 +263,18 @@ export const $object = <Kvs extends Record<string, TValidator<unknown>>>(
         if (validator[TAGS]?.optional) {
           continue;
         }
-        path.value = { not_found: k };
+        if (path) {
+          path.value = { not_found: k };
+        }
         return false;
       } else {
         const result = validator(value[k], path);
         if (!result) {
-          path.value = { invalid_element_value: { key: k, path: path.value } };
+          if (path) {
+            path.value = {
+              invalid_element_value: { key: k, path: path.value },
+            };
+          }
           return false;
         }
       }
@@ -255,55 +283,68 @@ export const $object = <Kvs extends Record<string, TValidator<unknown>>>(
   };
 };
 
-const _$number = (value: unknown, path: TRef<TPath>): value is number => {
+const _$number = (value: unknown, path?: TRef<TPath>): value is number => {
   if (typeof value === "number") {
     return true;
   }
-  path.value = { not_number: value };
+  if (path) {
+    path.value = { not_number: value };
+  }
   return false;
 };
 export const $number = () => {
   return _$number;
 };
 
-const _$string = (value: unknown, path: TRef<TPath>): value is string => {
+const _$string = (value: unknown, path?: TRef<TPath>): value is string => {
   if (typeof value === "string") {
     return true;
   }
-  path.value = { not_string: value };
+  if (path) {
+    path.value = { not_string: value };
+  }
   return false;
 };
 export const $string = () => {
   return _$string;
 };
 
-const _$boolean = (value: unknown, path: TRef<TPath>): value is boolean => {
+const _$boolean = (value: unknown, path?: TRef<TPath>): value is boolean => {
   if (typeof value === "boolean") {
     return true;
   }
-  path.value = { not_boolean: value };
+  if (path) {
+    path.value = { not_boolean: value };
+  }
   return false;
 };
 export const $boolean = () => {
   return _$boolean;
 };
 
-const _$null = (value: unknown, path: TRef<TPath>): value is null => {
+const _$null = (value: unknown, path?: TRef<TPath>): value is null => {
   if (value === null) {
     return true;
   }
-  path.value = { not_null: value };
+  if (path) {
+    path.value = { not_null: value };
+  }
   return false;
 };
 export const $null = () => {
   return _$null;
 };
 
-const _$undefined = (value: unknown, path: TRef<TPath>): value is undefined => {
+const _$undefined = (
+  value: unknown,
+  path?: TRef<TPath>,
+): value is undefined => {
   if (value === undefined) {
     return true;
   }
-  path.value = { not_undefined: value };
+  if (path) {
+    path.value = { not_undefined: value };
+  }
   return false;
 };
 export const $undefined = () => {
