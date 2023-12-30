@@ -87,19 +87,25 @@ export const $typeGuard = <T>(
   };
 };
 
-export function $tuple<T extends unknown[]>(
-  validators: [...{ [K in keyof T]: TValidator<T[K]> }],
-): (value: unknown, path?: TRef<TPath>) => value is T;
+export function $tuple<TTuple extends unknown[]>(
+  validators: [...{ [K in keyof TTuple]: TValidator<TTuple[K]> }],
+): (value: unknown, path?: TRef<TPath>) => value is readonly [...TTuple];
 export function $tuple<TTuple extends unknown[], TRest>(
   validators: [...{ [K in keyof TTuple]: TValidator<TTuple[K]> }],
   rest: TValidator<TRest>,
-): (value: unknown, path?: TRef<TPath>) => value is [...TTuple, ...TRest[]];
+): (
+  value: unknown,
+  path?: TRef<TPath>,
+) => value is readonly [...TTuple, ...TRest[]];
 export function $tuple<TTuple extends unknown[], TRest>(
   validators: [...{ [K in keyof TTuple]: TValidator<TTuple[K]> }],
   rest?: TValidator<TRest>,
 ) {
   if (rest === undefined) {
-    return (value: unknown, path?: TRef<TPath>): value is TTuple => {
+    return (
+      value: unknown,
+      path?: TRef<TPath>,
+    ): value is readonly [...TTuple] => {
       if (!Array.isArray(value)) {
         if (path) {
           path.value = { not_array: value };
@@ -130,7 +136,7 @@ export function $tuple<TTuple extends unknown[], TRest>(
     return (
       value: unknown,
       path?: TRef<TPath>,
-    ): value is [...TTuple, ...TRest[]] => {
+    ): value is readonly [...TTuple, ...TRest[]] => {
       if (!Array.isArray(value)) {
         if (path) {
           path.value = { not_array: value };
@@ -192,7 +198,7 @@ export const $literal = <T extends TNarrowable>(val: T) => {
 };
 
 export const $array = <T>(validator: TValidator<T>) => {
-  return (value: unknown, path?: TRef<TPath>): value is T[] => {
+  return (value: unknown, path?: TRef<TPath>): value is readonly T[] => {
     if (!Array.isArray(value)) {
       if (path) {
         path.value = { not_array: value };

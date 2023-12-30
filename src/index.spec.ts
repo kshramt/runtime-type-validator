@@ -359,12 +359,14 @@ type NExpect<T extends false> = T;
   }
   {
     const validator = T.$tuple([T.$number(), T.$string()]);
-    type _ = Expect<Check<T.$infer<typeof validator>, [number, string]>>;
+    type _ = Expect<
+      Check<T.$infer<typeof validator>, readonly [number, string]>
+    >;
   }
   {
     const validator = T.$tuple([T.$number(), T.$string()], T.$boolean());
     type _ = Expect<
-      Check<T.$infer<typeof validator>, [number, string, ...boolean[]]>
+      Check<T.$infer<typeof validator>, readonly [number, string, ...boolean[]]>
     >;
   }
   {
@@ -377,7 +379,12 @@ type NExpect<T extends false> = T;
     type _ = Expect<
       Check<
         T.$infer<typeof validator>,
-        { a: null; b: undefined; c: boolean; d: null | [string[]] }
+        {
+          a: null;
+          b: undefined;
+          c: boolean;
+          d: null | readonly [readonly string[]];
+        }
       >
     >;
   }
