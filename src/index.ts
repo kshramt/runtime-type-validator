@@ -7,6 +7,8 @@ type TPath =
   | { invalid_element_key: { path: TPath } }
   | { invalid_element_value: { key: string | number; path: TPath } }
   | { invalid_value: unknown }
+  | { length_not_equal: unknown }
+  | { length_too_short: unknown }
   | { not_array: unknown }
   | { not_boolean: unknown }
   | { not_found: string }
@@ -85,27 +87,88 @@ export const $typeGuard = <T>(
   };
 };
 
-export const $tuple = <T extends unknown[]>(
-  ...validators: [...{ [K in keyof T]: TValidator<T[K]> }]
-) => {
-  return (value: unknown, path?: TRef<TPath>): value is T => {
-    if (!Array.isArray(value)) {
-      if (path) {
-        path.value = { not_array: value };
-      }
-      return false;
-    }
-    for (let i = 0; i < validators.length; ++i) {
-      if (!validators[i](value[i], path)) {
+export function $tuple<T extends unknown[]>(
+  validators: [...{ [K in keyof T]: TValidator<T[K]> }],
+): (value: unknown, path?: TRef<TPath>) => value is T;
+export function $tuple<TTuple extends unknown[], TRest>(
+  validators: [...{ [K in keyof TTuple]: TValidator<TTuple[K]> }],
+  rest: TValidator<TRest>,
+): (value: unknown, path?: TRef<TPath>) => value is [...TTuple, ...TRest[]];
+export function $tuple<TTuple extends unknown[], TRest>(
+  validators: [...{ [K in keyof TTuple]: TValidator<TTuple[K]> }],
+  rest?: TValidator<TRest>,
+) {
+  if (rest === undefined) {
+    return (value: unknown, path?: TRef<TPath>): value is TTuple => {
+      if (!Array.isArray(value)) {
         if (path) {
-          path.value = { invalid_element_value: { key: i, path: path.value } };
+          path.value = { not_array: value };
         }
         return false;
       }
-    }
-    return true;
-  };
-};
+      if (value.length !== validators.length) {
+        if (path) {
+          path.value = {
+            length_not_equal: value,
+          };
+        }
+        return false;
+      }
+      for (let i = 0; i < validators.length; ++i) {
+        if (!validators[i](value[i], path)) {
+          if (path) {
+            path.value = {
+              invalid_element_value: { key: i, path: path.value },
+            };
+          }
+          return false;
+        }
+      }
+      return true;
+    };
+  } else {
+    return (
+      value: unknown,
+      path?: TRef<TPath>,
+    ): value is [...TTuple, ...TRest[]] => {
+      if (!Array.isArray(value)) {
+        if (path) {
+          path.value = { not_array: value };
+        }
+        return false;
+      }
+      if (value.length < validators.length) {
+        if (path) {
+          path.value = {
+            length_too_short: value,
+          };
+        }
+        return false;
+      }
+      for (let i = 0; i < validators.length; ++i) {
+        if (!validators[i](value[i], path)) {
+          if (path) {
+            path.value = {
+              invalid_element_value: { key: i, path: path.value },
+            };
+          }
+          return false;
+        }
+      }
+      for (let i = validators.length; i < value.length; ++i) {
+        if (!rest(value[i], path)) {
+          if (path) {
+            path.value = {
+              invalid_element_value: { key: i, path: path.value },
+            };
+          }
+          return false;
+        }
+      }
+      return true;
+    };
+  }
+}
 
 type TNarrowable =
   | string

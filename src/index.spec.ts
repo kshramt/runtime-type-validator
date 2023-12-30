@@ -78,10 +78,45 @@ vt.test("T.$array", () => {
 });
 
 vt.test("T.$tuple", () => {
-  const validator = T.$tuple(T.$null(), T.$string(), T.$literal("literal"));
+  const validator = T.$tuple([T.$null(), T.$string(), T.$literal("literal")]);
   vt.expect(T.parse(validator, [null, "a", "literal"])).toStrictEqual({
     success: true,
     value: [null, "a", "literal"],
+  });
+  vt.expect(T.parse(validator, [null, 1, "literal"])).toStrictEqual({
+    success: false,
+    path: { invalid_element_value: { key: 1, path: { not_string: 1 } } },
+  });
+  vt.expect(T.parse(validator, [null, "a", "LITERAL"])).toStrictEqual({
+    success: false,
+    path: {
+      invalid_element_value: { key: 2, path: { invalid_value: "LITERAL" } },
+    },
+  });
+  vt.expect(T.parse(validator, { a: 1 })).toStrictEqual({
+    success: false,
+    path: { not_array: { a: 1 } },
+  });
+});
+
+vt.test("T.$tuple with rest", () => {
+  const validator = T.$tuple(
+    [T.$null(), T.$string(), T.$literal("literal")],
+    T.$boolean(),
+  );
+  vt.expect(T.parse(validator, [null, "a", "literal"])).toStrictEqual({
+    success: true,
+    value: [null, "a", "literal"],
+  });
+  vt.expect(T.parse(validator, [null, "a", "literal", true])).toStrictEqual({
+    success: true,
+    value: [null, "a", "literal", true],
+  });
+  vt.expect(
+    T.parse(validator, [null, "a", "literal", true, false]),
+  ).toStrictEqual({
+    success: true,
+    value: [null, "a", "literal", true, false],
   });
   vt.expect(T.parse(validator, [null, 1, "literal"])).toStrictEqual({
     success: false,
@@ -323,15 +358,21 @@ type NExpect<T extends false> = T;
     type _ = Expect<Check<T.$infer<typeof validator>, number>>;
   }
   {
-    const validator = T.$tuple(T.$number(), T.$string());
+    const validator = T.$tuple([T.$number(), T.$string()]);
     type _ = Expect<Check<T.$infer<typeof validator>, [number, string]>>;
+  }
+  {
+    const validator = T.$tuple([T.$number(), T.$string()], T.$boolean());
+    type _ = Expect<
+      Check<T.$infer<typeof validator>, [number, string, ...boolean[]]>
+    >;
   }
   {
     const validator = T.$object({
       a: T.$null(),
       b: T.$undefined(),
       c: T.$boolean(),
-      d: T.$union(T.$null(), T.$tuple(T.$array(T.$string()))),
+      d: T.$union(T.$null(), T.$tuple([T.$array(T.$string())])),
     });
     type _ = Expect<
       Check<
